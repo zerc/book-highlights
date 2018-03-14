@@ -1,0 +1,18 @@
+version: '3'
+services:
+  kindle:
+    build:
+      context: .
+      dockerfile: Dockerfile.kindle
+    depends_on:
+     - chrome
+    environment:
+     - API_ENTRYPOINT=https://example.io/api/v1/highlights/bulk/?token=secret
+     - CHROME_DEBUG=0
+  chrome:
+    image: "justinribeiro/chrome-headless"
+    ports:
+      - "9222:9222"
+    cap_add:
+      - SYS_ADMIN
+

@@ -16,6 +16,8 @@ This project is a set of tools to export your book hightlights from different se
 
 ## Amazon Kindle
 
+### Intro
+
 Amazon doesn't provide any API to interact with highlights instead, it does provide a website https://read.amazon.co.uk/notebook where you can see them. If you google around, you may find several solutions to parse that page and export the data in different formats.
 
 I've tried a few of them and they didn't work for me because I wasn't able to log into my account in order parse the page. I suppose since those packages were developed, Amazon improved its security a lot and nowdays it takes more efforts to pass it through. All solutions I've found are built upon a "mechanize" package (Ruby version in particular, but I've tried my own implementation via python-requests) i.e. not a real browser. 
@@ -32,3 +34,44 @@ After that I've tried the [headless Chrome](https://hub.docker.com/r/justinribei
 
 * I do log in manually, solve the captcha if required and leave the session open.
 * After that, it's possible to run a script and through [CDP](https://chromedevtools.github.io/devtools-protocol/) parse the page.
+
+### Compile
+
+The script has written on Go. You need to change your `$GOPATH` to the root of the repositry:
+
+```shell
+source ./activate
+```
+
+To manage dependencies I use [dep](https://github.com/golang/dep) you need install it globally and then do:
+
+```shell
+make install
+```
+
+To complile:
+
+```shell
+make build
+```
+
+To run:
+
+```shell
+make kindle
+```
+
+This command will build and start container required and will try to parse the page. If the authorisation will be required the script will stop. And you need to open http://localhost:9222/ page (in case of local usage), manually log in and re-run the script.
+
+During the parsing, the script will try to send highlights found to `API_ENTRYPOINT` specified in the `docker-compose.yml` file. You can override it through the command line like this:
+
+```shell
+docker-compose run -e API_ENTRYPOINT=https://my.custom.com/api/highlights/ kindle
+```
+
+
+### TODO:
+
+* Add a built in service to store highlights.
+* Make the parser a bit flexable (debug levels, environment variables).
+* Add an example of Anssible script to set up this on the server.

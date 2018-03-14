@@ -1,0 +1,6 @@
+# This file must be used with "source ./activate" in order to change your GOPATH
+# TODO: remember the previous value and restore it.
+
+GOPATH=$(pwd)
+export GOPATH
+echo "GOPATH is $GOPATH"
