@@ -14,3 +14,8 @@ kindle:
 	docker-compose up kindle
 
 bkindle: build kindle
+
+
+deploy:
+	docker tag $(shell docker images --format="{{.ID}}" | head -n1) zerc/book-highlights-kindle
+	docker push zerc/book-highlights-kindle

@@ -1,0 +1,16 @@
+sudo: required
+
+language: Go
+
+services:
+  - docker
+
+before_install:
+  - docker-compose build kindle
+  - docker images | head -n5
+
+deploy:
+  provider: script
+  script: docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD" && make deploy
+  on:
+    branch: master
