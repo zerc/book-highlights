@@ -6,6 +6,9 @@ services:
   - docker
 
 before_install:
+  - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+  - make install
+  - make build
   - docker-compose build kindle
   - docker images | head -n5
 
