@@ -16,6 +16,33 @@ This project is a set of tools to export your book hightlights from different se
 
 * [Amazon Kindle](src/kindle/README.md)
 
+# Quick start
+
+You can either build everything by yourself (see README files for each service for details) or use images from DockerHub.
+
+Here is an example of the compose file to use pre built images:
+
+```yml
+version: '3'
+services:
+  kindle:
+    image: "zerc/book-highlights-kindle"
+    depends_on:
+     - chrome
+    environment:
+     - API_ENTRYPOINT=API_URL
+     - CHROME_DEBUG=0
+  chrome:
+    image: "justinribeiro/chrome-headless"
+    ports:
+      - "9222:9222"
+    cap_add:
+      - SYS_ADMIN
+```
+
+Where `API_URL` needs to be replaced to your API endpoint to accept the payload with highlights parsed.
+
+
 ### TODO:
 
 * Add a builtin service to store highlights.
