@@ -6,6 +6,9 @@ With that being said, be aware of the poor implementation ahead. Feel free to co
 
 # Book Highlights
 
+[![Build Status](https://travis-ci.org/zerc/book-highlights.svg?branch=master)](https://travis-ci.org/zerc/book-highlights) [![Go Report Card](https://goreportcard.com/badge/github.com/zerc/book-highlights)](https://goreportcard.com/report/github.com/zerc/book-highlights) 
+[![GitHub license](https://img.shields.io/github/license/zerc/book-highlights.svg)](https://github.com/zerc/book-highlights/blob/master/LICENSE)
+
 This project is a set of tools to export your book hightlights from different services (Kindle, Google Books etc) to your storage where you can work with them in any way you like plus, provide API to query them.
 
 
