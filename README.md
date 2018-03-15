@@ -72,6 +72,7 @@ docker-compose run -e API_ENTRYPOINT=https://my.custom.com/api/highlights/ kindl
 
 ### TODO:
 
-* Add a built in service to store highlights.
-* Make the parser a bit flexable (debug levels, environment variables).
+* Add a builtin service to store highlights.
+* Make the parser a bit more flexable (debug levels, environment variables).
 * Add an example of Anssible script to set up this on the server.
+* Build and host the image.
