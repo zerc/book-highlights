@@ -2,6 +2,9 @@ sudo: required
 
 language: Go
 
+env:
+  - TRAVIS_TAG="0.1"
+
 services:
   - docker
 
@@ -16,4 +19,4 @@ deploy:
   provider: script
   script: docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD" && make deploy
   on:
-    branch: master
+    tags: true
