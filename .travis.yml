@@ -2,8 +2,8 @@ sudo: required
 
 language: Go
 
-env:
-  - TRAVIS_TAG="0.1"
+# env:
+#   - TRAVIS_TAG="0.1"
 
 services:
   - docker
