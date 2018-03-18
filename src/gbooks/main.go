@@ -1,93 +1,14 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
-	"net/http"
-	"net/url"
-	"os"
-	"path/filepath"
 
 	"golang.org/x/net/context"
-	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/api/drive/v3"
+	drive "google.golang.org/api/drive/v3"
 )
-
-// getClient uses a Context and Config to retrieve a Token
-// then generate a Client. It returns the generated Client.
-func getClient(ctx context.Context, config *oauth2.Config) *http.Client {
-	cacheFile, err := tokenCacheFile()
-	if err != nil {
-		log.Fatalf("Unable to get path to cached credential file. %v", err)
-	}
-	tok, err := tokenFromFile(cacheFile)
-	if err != nil {
-		tok = getTokenFromWeb(config)
-		saveToken(cacheFile, tok)
-	}
-	return config.Client(ctx, tok)
-}
-
-// getTokenFromWeb uses Config to request a Token.
-// It returns the retrieved Token.
-func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
-	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-	fmt.Printf("Go to the following link in your browser then type the "+
-		"authorization code: \n%v\n", authURL)
-
-	var code string
-	if _, err := fmt.Scan(&code); err != nil {
-		log.Fatalf("Unable to read authorization code %v", err)
-	}
-
-	tok, err := config.Exchange(oauth2.NoContext, code)
-	if err != nil {
-		log.Fatalf("Unable to retrieve token from web %v", err)
-	}
-	return tok
-}
-
-// tokenCacheFile generates credential file path/filename.
-// It returns the generated credential path/filename.
-func tokenCacheFile() (string, error) {
-	// usr, err := user.Current()
-	// if err != nil {
-	// 	return "", err
-	// }
-	// tokenCacheDir := filepath.Join(usr.HomeDir, ".credentials")
-	tokenCacheDir := "/tmp/.credentials"
-	os.MkdirAll(tokenCacheDir, 0700)
-	return filepath.Join(tokenCacheDir,
-		url.QueryEscape("drive-go-quickstart.json")), nil
-}
-
-// tokenFromFile retrieves a Token from a given file path.
-// It returns the retrieved Token and any read error encountered.
-func tokenFromFile(file string) (*oauth2.Token, error) {
-	f, err := os.Open(file)
-	if err != nil {
-		return nil, err
-	}
-	t := &oauth2.Token{}
-	err = json.NewDecoder(f).Decode(t)
-	defer f.Close()
-	return t, err
-}
-
-// saveToken uses a file path to create a file and store the
-// token in it.
-func saveToken(file string, token *oauth2.Token) {
-	fmt.Printf("Saving credential file to: %s\n", file)
-	f, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		log.Fatalf("Unable to cache oauth token: %v", err)
-	}
-	defer f.Close()
-	json.NewEncoder(f).Encode(token)
-}
 
 func main() {
 	ctx := context.Background()
@@ -99,7 +20,7 @@ func main() {
 
 	// If modifying these scopes, delete your previously saved credentials
 	// at ~/.credentials/drive-go-quickstart.json
-	config, err := google.ConfigFromJSON(b, drive.DriveMetadataReadonlyScope)
+	config, err := google.ConfigFromJSON(b, drive.DriveScope)
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
@@ -110,19 +31,59 @@ func main() {
 		log.Fatalf("Unable to retrieve drive Client %v", err)
 	}
 
-	r, err := srv.Files.List().PageSize(10).
-		Fields("nextPageToken, files(id, name)").Do()
+	dirId, err := getHighlightsDirectoryID(srv)
 	if err != nil {
-		log.Fatalf("Unable to retrieve files: %v", err)
+		log.Fatalf("Can't find the directory with your highlights: %v", err)
 	}
 
-	fmt.Println("Files:")
-	if len(r.Files) > 0 {
-		for _, i := range r.Files {
-			fmt.Printf("%s (%s)\n", i.Name, i.Id)
+	log.Printf("Directory ID: %s", dirId)
+
+	files, err := getFiles(srv, dirId)
+	if err != nil {
+		log.Fatalf("Can't fetch fils in directory. %v", err)
+	}
+
+	for i, f := range *files {
+
+		log.Println(i, f)
+
+		response, err := srv.Files.Export(f.Id, "text/html").Download()
+
+		if err != nil {
+			log.Fatalf("Can't export file %s due to %s", f.Id, err)
 		}
-	} else {
-		fmt.Println("No files found.")
+
+		defer response.Body.Close()
+		body, _ := ioutil.ReadAll(response.Body)
+
+		log.Printf("%s", body)
+	}
+}
+
+// getHighlightsDirectoryID gets ID of the directory where Google Books highlights are living
+func getHighlightsDirectoryID(srv *drive.Service) (string, error) {
+	r, err := srv.Files.List().Q("mimeType = 'application/vnd.google-apps.folder' and name = 'Play Books Notes'").Do()
+
+	if err != nil {
+		return "", err
 	}
 
+	if len(r.Files) > 0 {
+		return r.Files[0].Id, nil
+	}
+
+	return "", fmt.Errorf("Not found")
+}
+
+// getFiles returns a pointer to a list of pointers to files
+// TODO: use channels to iterate over fiels and their content
+func getFiles(srv *drive.Service, dirId string) (*[]*drive.File, error) {
+	r, err := srv.Files.List().Q(fmt.Sprintf("mimeType = 'application/vnd.google-apps.document' and '%s' in parents", dirId)).Do()
+
+	if err != nil {
+		var files []*drive.File
+		return &files, err
+	}
+
+	return &r.Files, nil
 }

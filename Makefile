@@ -23,4 +23,4 @@ deploy:
 	docker push zerc/book-highlights-kindle
 
 gbooks:
-	GOOS=linux go build -o bin/gbooks src/gbooks/main.go
+	GOOS=linux go build -o bin/gbooks src/gbooks/*.go
