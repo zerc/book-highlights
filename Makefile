@@ -24,3 +24,5 @@ deploy:
 
 gbooks:
 	GOOS=linux go build -o bin/gbooks src/gbooks/*.go
+	docker-compose build gbooks
+	docker-compose run gbooks

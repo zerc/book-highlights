@@ -4,11 +4,16 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"regexp"
+	"strings"
 
+	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
 	drive "google.golang.org/api/drive/v3"
 )
+
+var colourRe = regexp.MustCompile("background-color:(#.{6})")
 
 func main() {
 	ctx := context.Background()
@@ -43,20 +48,42 @@ func main() {
 		log.Fatalf("Can't fetch fils in directory. %v", err)
 	}
 
-	for i, f := range *files {
+	for _, f := range *files {
+		log.Printf("Handle file: %s", f.Name)
 
-		log.Println(i, f)
-
-		response, err := srv.Files.Export(f.Id, "text/html").Download()
+		doc, err := getFileContent(srv, f.Id)
 
 		if err != nil {
-			log.Fatalf("Can't export file %s due to %s", f.Id, err)
+			log.Fatalf("Can't export file %s due to: %s", f.Id, err)
 		}
 
-		defer response.Body.Close()
-		body, _ := ioutil.ReadAll(response.Body)
+		doc.Find("table table tr td:nth-child(2)").Each(func(i int, s *goquery.Selection) {
+			if s.Find("p").Size() < 3 {
+				html, _ := s.Html()
+				log.Printf("Warn: invalid HTML block:\n%s\n", html)
+				return
+			}
 
-		log.Printf("%s", body)
+			text := strings.TrimSpace(s.Find("p:nth-child(1)").Text())
+
+			if text == "" {
+				return
+			}
+
+			note := strings.TrimSpace(s.Find("p:nth-child(2)").Text())
+			link, _ := s.ParentFiltered("tr").Find("a").Attr("href")
+
+			style, _ := s.Find("p:nth-child(1) span").Attr("style")
+			matches := colourRe.FindStringSubmatch(style)
+
+			if len(matches) != 2 {
+				log.Fatalf("Can't find a colour. Style: %s", style)
+			}
+
+			colour := matches[1]
+
+			log.Printf("%s\n%s\n%s\n%s\n\n", text, note, link, colour)
+		})
 	}
 }
 
@@ -86,4 +113,21 @@ func getFiles(srv *drive.Service, dirId string) (*[]*drive.File, error) {
 	}
 
 	return &r.Files, nil
+}
+
+// getFileContent gets the file's content as HTML Document
+func getFileContent(srv *drive.Service, fileId string) (*goquery.Document, error) {
+	var doc goquery.Document
+
+	response, err := srv.Files.Export(fileId, "text/html").Download()
+
+	if err != nil {
+		return &doc, err
+	}
+
+	if response.StatusCode != 200 {
+		return &doc, fmt.Errorf("Status code: %d", response.StatusCode)
+	}
+
+	return goquery.NewDocumentFromResponse(response)
 }
