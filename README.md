@@ -14,8 +14,8 @@ This project is a set of tools to export your book hightlights from different se
 
 **Services supported**
 
-* [Amazon Kindle](src/kindle/README.md)
-* [Google Books](src/gbooks/README.md)
+* [Amazon Kindle](src/kindle)
+* [Google Books](src/gbooks)
 
 # Quick start
 
