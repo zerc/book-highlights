@@ -1,16 +1,14 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
-	"net/http"
-	"os"
 	"regexp"
 	"sort"
 	"strings"
+
+	"common"
 
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/context"
@@ -29,19 +27,6 @@ var coloursMap = map[string]string{
 
 // The fallback if the colour isn't detected.
 var defaultColour = "yellow"
-
-// The endpoint to use to save parsed data somewhere.
-var APIEndpoint = os.Getenv("API_ENTRYPOINT")
-
-// The structure to represent a highlight.
-type Highlight struct {
-	URL         string `json:"source_url"`
-	Text        string `json:"text"`
-	Note        string `json:"note"`
-	Colour      string `json:"color"`
-	SourceID    string `json:"source_id"`
-	SourceTitle string `json:"source_title"`
-}
 
 func main() {
 	ctx := context.Background()
@@ -88,7 +73,7 @@ func main() {
 		highlights := getHighlights(f, doc)
 
 		if len(*highlights) > 0 {
-			resp, resp_err := CreateHighlights(highlights)
+			resp, resp_err := common.CreateHighlights(highlights)
 
 			if resp_err != nil {
 				log.Fatal(resp_err)
@@ -147,8 +132,8 @@ func getFileContent(srv *drive.Service, fileId string) (*goquery.Document, error
 	return goquery.NewDocumentFromResponse(response)
 }
 
-func getHighlights(f *drive.File, doc *goquery.Document) *[]*Highlight {
-	var Highlights []*Highlight
+func getHighlights(f *drive.File, doc *goquery.Document) *[]*common.Highlight {
+	var Highlights []*common.Highlight
 
 	doc.Find("table table tr td:nth-child(2)").Each(func(i int, s *goquery.Selection) {
 		// Avoid "bad" highliths i.e. without text
@@ -164,7 +149,7 @@ func getHighlights(f *drive.File, doc *goquery.Document) *[]*Highlight {
 			return
 		}
 
-		hl := Highlight{Text: text}
+		hl := common.Highlight{Text: text}
 		hl.Note = strings.TrimSpace(s.Find("p:nth-child(2)").Text())
 
 		link, _ := s.ParentFiltered("tr").Find("a").Attr("href")
@@ -200,20 +185,4 @@ func getColourFromSelection(s *goquery.Selection) string {
 	} else {
 		return colour
 	}
-}
-
-// CreateHighlights creates highlights in the data store using REST API.
-func CreateHighlights(highlights *[]*Highlight) ([]byte, error) {
-	payload, _ := json.Marshal(map[string]interface{}{"items": highlights})
-
-	response, err := http.Post(APIEndpoint, "application/json", bytes.NewBuffer(payload))
-
-	if err != nil {
-		return make([]byte, 0), err
-	}
-
-	defer response.Body.Close()
-	body, _ := ioutil.ReadAll(response.Body) // TODO: catch an error here?
-
-	return body, nil
 }

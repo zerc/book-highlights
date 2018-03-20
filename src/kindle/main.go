@@ -4,13 +4,10 @@
 package main
 
 import (
-	"bytes"
+	"common"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"sort"
 	"strings"
@@ -29,17 +26,6 @@ const ChromeClientURL = "http://chrome:9222/json"
 
 // Enable or disable debug output from the chromedp
 var ChromeDebug = os.Getenv("CHROME_DEBUG") == "1"
-
-// The endpoint to use to save parsed data somewhere.
-var APIEndpoint = os.Getenv("API_ENTRYPOINT")
-
-// The structure to represent a highlight.
-type Highlight struct {
-	Text        string `json:"text"`
-	Colour      string `json:"color"`
-	SourceID    string `json:"source_id"`
-	SourceTitle string `json:"source_title"`
-}
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -67,10 +53,10 @@ func main() {
 			log.Fatal(err)
 		}
 
-		var highlights *[]*Highlight
+		var highlights *[]*common.Highlight
 
 		if highlights, err = GetHighlights(ctx, client, book); err == nil {
-			resp, resp_err := CreateHighlights(highlights)
+			resp, resp_err := common.CreateHighlights(highlights)
 
 			if resp_err != nil {
 				log.Fatal(resp_err)
@@ -188,8 +174,8 @@ func SelectBook(ctx context.Context, client *chromedp.CDP, book *map[string]stri
 
 // GetHighlights parses the highlights of the book specified.
 // TODO: handle the pagination. It does look like initially only 100 highlights are displayed.
-func GetHighlights(ctx context.Context, client *chromedp.CDP, book *map[string]string) (*[]*Highlight, error) {
-	var Highlights []*Highlight
+func GetHighlights(ctx context.Context, client *chromedp.CDP, book *map[string]string) (*[]*common.Highlight, error) {
+	var Highlights []*common.Highlight
 	var nodes []*cdp.Node
 	var count int
 	const retryCount = 5 // A number of retries to wait until all hightlights are loaded
@@ -219,7 +205,7 @@ func GetHighlights(ctx context.Context, client *chromedp.CDP, book *map[string]s
 	log.Printf(">> Found %d highligts (%d expected)\n", len(nodes), count)
 
 	for _, node := range nodes {
-		hl := Highlight{}
+		hl := common.Highlight{}
 		hl.SourceID = (*book)["id"]
 		hl.SourceTitle = (*book)["title"]
 		hl.Colour = GetColourFromClass(node.Parent.AttributeValue("class"))
@@ -243,22 +229,6 @@ func GetHighlights(ctx context.Context, client *chromedp.CDP, book *map[string]s
 func GetColourFromClass(class string) string {
 	classes := strings.Split(class, " ")
 	return strings.TrimPrefix(classes[len(classes)-1], "kp-notebook-highlight-")
-}
-
-// CreateHighlights creates highlights in the data store using REST API.
-func CreateHighlights(highlights *[]*Highlight) ([]byte, error) {
-	payload, _ := json.Marshal(map[string]interface{}{"items": highlights})
-
-	response, err := http.Post(APIEndpoint, "application/json", bytes.NewBuffer(payload))
-
-	if err != nil {
-		return make([]byte, 0), err
-	}
-
-	defer response.Body.Close()
-	body, _ := ioutil.ReadAll(response.Body) // TODO: catch an error here?
-
-	return body, nil
 }
 
 // Finish does required operations to finish the work with the Chrome.
