@@ -10,6 +10,7 @@ services:
 
 before_install:
   - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+  - source ./activate
   - make install
   - make build
   - docker-compose build kindle
