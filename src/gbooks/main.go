@@ -1,10 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
+	"os"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -14,6 +19,29 @@ import (
 )
 
 var colourRe = regexp.MustCompile("background-color:(#.{6})")
+
+var coloursMap = map[string]string{
+	"#93e3ed": "blue",
+	"#fde096": "yellow",
+	"#ffb8a1": "red",
+	"#c5e1a5": "green",
+}
+
+// The fallback if the colour isn't detected.
+var defaultColour = "yellow"
+
+// The endpoint to use to save parsed data somewhere.
+var APIEndpoint = os.Getenv("API_ENTRYPOINT")
+
+// The structure to represent a highlight.
+type Highlight struct {
+	URL         string `json:"source_url"`
+	Text        string `json:"text"`
+	Note        string `json:"note"`
+	Colour      string `json:"color"`
+	SourceID    string `json:"source_id"`
+	SourceTitle string `json:"source_title"`
+}
 
 func main() {
 	ctx := context.Background()
@@ -57,33 +85,20 @@ func main() {
 			log.Fatalf("Can't export file %s due to: %s", f.Id, err)
 		}
 
-		doc.Find("table table tr td:nth-child(2)").Each(func(i int, s *goquery.Selection) {
-			if s.Find("p").Size() < 3 {
-				html, _ := s.Html()
-				log.Printf("Warn: invalid HTML block:\n%s\n", html)
-				return
+		highlights := getHighlights(f, doc)
+
+		if len(*highlights) > 0 {
+			resp, resp_err := CreateHighlights(highlights)
+
+			if resp_err != nil {
+				log.Fatal(resp_err)
+			} else {
+				log.Printf("%s", resp)
 			}
+		} else {
+			log.Fatalf("Unable to fetch highlights from %s due to %s", f.Name, err)
+		}
 
-			text := strings.TrimSpace(s.Find("p:nth-child(1)").Text())
-
-			if text == "" {
-				return
-			}
-
-			note := strings.TrimSpace(s.Find("p:nth-child(2)").Text())
-			link, _ := s.ParentFiltered("tr").Find("a").Attr("href")
-
-			style, _ := s.Find("p:nth-child(1) span").Attr("style")
-			matches := colourRe.FindStringSubmatch(style)
-
-			if len(matches) != 2 {
-				log.Fatalf("Can't find a colour. Style: %s", style)
-			}
-
-			colour := matches[1]
-
-			log.Printf("%s\n%s\n%s\n%s\n\n", text, note, link, colour)
-		})
 	}
 }
 
@@ -130,4 +145,75 @@ func getFileContent(srv *drive.Service, fileId string) (*goquery.Document, error
 	}
 
 	return goquery.NewDocumentFromResponse(response)
+}
+
+func getHighlights(f *drive.File, doc *goquery.Document) *[]*Highlight {
+	var Highlights []*Highlight
+
+	doc.Find("table table tr td:nth-child(2)").Each(func(i int, s *goquery.Selection) {
+		// Avoid "bad" highliths i.e. without text
+		if s.Find("p").Size() < 3 {
+			html, _ := s.Html()
+			log.Printf("Warn: invalid HTML block:\n%s\n", html)
+			return
+		}
+
+		text := strings.TrimSpace(s.Find("p:nth-child(1)").Text())
+		if text == "" {
+			log.Printf("Warn: no text found in the block.")
+			return
+		}
+
+		hl := Highlight{Text: text}
+		hl.Note = strings.TrimSpace(s.Find("p:nth-child(2)").Text())
+
+		link, _ := s.ParentFiltered("tr").Find("a").Attr("href")
+		hl.URL = link
+		hl.Colour = getColourFromSelection(s)
+		hl.SourceTitle = f.Name
+		hl.SourceID = f.Id
+
+		Highlights = append(Highlights, &hl)
+	})
+
+	// Reverse the order
+	sort.SliceStable(Highlights, func(i, j int) bool {
+		return i > j
+	})
+
+	return &Highlights
+}
+
+func getColourFromSelection(s *goquery.Selection) string {
+	style, _ := s.Find("p:nth-child(1) span").Attr("style")
+	matches := colourRe.FindStringSubmatch(style)
+
+	var colour string
+
+	if len(matches) >= 2 {
+		hex := matches[1]
+		colour = coloursMap[hex]
+	}
+
+	if colour == "" {
+		return defaultColour
+	} else {
+		return colour
+	}
+}
+
+// CreateHighlights creates highlights in the data store using REST API.
+func CreateHighlights(highlights *[]*Highlight) ([]byte, error) {
+	payload, _ := json.Marshal(map[string]interface{}{"items": highlights})
+
+	response, err := http.Post(APIEndpoint, "application/json", bytes.NewBuffer(payload))
+
+	if err != nil {
+		return make([]byte, 0), err
+	}
+
+	defer response.Body.Close()
+	body, _ := ioutil.ReadAll(response.Body) // TODO: catch an error here?
+
+	return body, nil
 }
