@@ -21,3 +21,5 @@ services:
       dockerfile: Dockerfile.gbooks
     volumes:
       - /tmp/.credentials/:/tmp/.credentials/
+    environment:
+     - API_ENTRYPOINT=https://example.io/api/v1/highlights/bulk/?token=secret
