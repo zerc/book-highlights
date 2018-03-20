@@ -16,3 +16,6 @@
 # dep-related directories
 pkg/*
 src/*/vendor/*
+
+# For personal usage. There is docker-compose.yml.example which can be used as an example.
+docker-compose.yml
