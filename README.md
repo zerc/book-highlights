@@ -15,6 +15,7 @@ This project is a set of tools to export your book hightlights from different se
 **Services supported**
 
 * [Amazon Kindle](src/kindle/README.md)
+* [Google Books](src/gbooks/README.md)
 
 # Quick start
 
@@ -45,6 +46,6 @@ Where `API_URL` needs to be replaced to your API endpoint to accept the payload 
 
 ### TODO:
 
+* Better READMEs
 * Add a builtin service to store highlights.
-* Make the Kindle parser a bit more flexable (debug levels, environment variables).
 * Add an example of Ansible playbook to set up everything on the server.

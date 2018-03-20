@@ -52,3 +52,8 @@ During the parsing, the script will try to send highlights found to `API_ENTRYPO
 ```shell
 docker-compose run -e API_ENTRYPOINT=https://my.custom.com/api/highlights/ kindle
 ```
+
+
+## TODO
+
+* Make the Kindle parser a bit more flexable (debug levels, environment variables).
