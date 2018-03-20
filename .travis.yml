@@ -13,7 +13,7 @@ before_install:
   - source ./activate
   - make install
   - make build
-  - docker-compose build kindle
+  - docker-compose -f docker-compose.yml.example build kindle
   - docker images | head -n5
 
 deploy:
