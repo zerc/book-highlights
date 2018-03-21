@@ -14,12 +14,12 @@ var APIEndpoint = os.Getenv("API_ENTRYPOINT")
 
 // The structure to represent a highlight.
 type Highlight struct {
-	URL         string `json:"source_url"`
-	Text        string `json:"text"`
-	Note        string `json:"note"`
-	Colour      string `json:"color"`
-	SourceID    string `json:"source_id"`
-	SourceTitle string `json:"source_title"`
+	URL         string `bson:"source_url" json:"source_url"`
+	Text        string `bson:"text" json:"text"`
+	Note        string `bson:"note" json:"note"`
+	Colour      string `bson:"colour" json:"color"`
+	SourceID    string `bson:"source_id" json:"source_id"`
+	SourceTitle string `bson:"source_title" json:"source_title"`
 }
 
 // CreateHighlights creates highlights in the data store using REST API.

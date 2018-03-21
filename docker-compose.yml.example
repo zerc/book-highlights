@@ -23,3 +23,15 @@ services:
       - /tmp/.credentials/:/tmp/.credentials/
     environment:
      - API_ENTRYPOINT=https://example.io/api/v1/highlights/bulk/?token=secret
+  storage:
+    build:
+      context: .
+      dockerfile: Dockerfile.storage
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mongo
+  mongo:
+    image: "mongo"
+    volumes:
+      - /tmp/mongo_data:/tmp/data
