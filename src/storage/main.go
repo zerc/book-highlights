@@ -3,7 +3,6 @@ package main
 import (
 	"common"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -42,30 +41,32 @@ func HighlightsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateHighlights(w http.ResponseWriter, r *http.Request) {
-	// var highlights []*common.Highlight
-	var items map[string]*[]common.Highlight
+	var data map[string]*[]common.Highlight
 
 	defer r.Body.Close()
 
-	// body, _ := ioutil.ReadAll(r.Body) // TODO: catch an error here?
-	// err := json.Unmarshal(body, &items)
-	err := json.NewDecoder(r.Body).Decode(&items)
+	err := json.NewDecoder(r.Body).Decode(&data)
 	if err != nil {
 		log.Printf("Error: %s", err)
 		w.WriteHeader(http.StatusBadRequest)
 	}
 
-	log.Printf("Got: %+v", items)
+	// TODO: validate items received
+
+	log.Printf("Got: %+v", data)
 
 	s := getSession()
 	defer s.Close()
 	collection := s.DB("storage").C("highlights1")
-	hl := *items["items"]
 
-	bulk := collection.Bulk()
-	bulk.Insert(hl...)
+	items := make([]interface{}, len(*data["items"]))
 
-	if _, err := bulk.Run(); err != nil {
+	for _, x := range *data["items"] {
+		items = append(items, x)
+	}
+
+	err = collection.Insert(items...)
+	if err != nil {
 		log.Printf("DB Error: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 	} else {
@@ -80,20 +81,20 @@ func ListHighlights(w http.ResponseWriter, r *http.Request) {
 	defer s.Close()
 	collection := s.DB("storage").C("highlights1")
 
-	var highlights []common.Highlight
-	err := collection.Find(nil).All(&highlights)
-
+	result := make([]*common.Highlight, 0)
+	err := collection.Find(nil).All(&result)
 	if err != nil {
 		log.Printf("Read error: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 
-	log.Printf("Result %+v", highlights)
+	log.Printf("Result %+v", result[0])
 
-	result, err := json.Marshal(highlights)
-	if err != nil {
-		fmt.Fprintf(w, "%s", result)
+	jsonBytes, err := json.Marshal(result)
+	if err == nil {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		w.Write(jsonBytes)
 	} else {
 		log.Printf("Marshal error: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
