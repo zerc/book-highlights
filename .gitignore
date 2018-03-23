@@ -17,5 +17,10 @@
 pkg/*
 src/*/vendor/*
 
+# Playground
+src/sandbox/*
+
 # For personal usage. There is docker-compose.yml.example which can be used as an example.
 docker-compose.yml
+
+
