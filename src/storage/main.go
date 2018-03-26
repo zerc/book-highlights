@@ -3,20 +3,32 @@ package main
 import (
 	"common"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
 	mgo "gopkg.in/mgo.v2"
 )
 
+var dbName = "storage"
+
+var collectionName = "highlights"
+
+// A string to connect to Mongodb
+// Example: [mongodb://][user:pass@]host1[:port1][,host2[:port2],...][/database][?options]
+var mongoConnectionString = "mongo"
+
+// The host to run the web server at
 var host = "0.0.0.0:8000"
 
+// A global variable store a reference to the mongo session
 var session *mgo.Session
 
+// getSession creates or clones existing Mongodb session
 func getSession() *mgo.Session {
 	if session == nil {
 		var err error
-		session, err = mgo.Dial("mongo")
+		session, err = mgo.Dial(mongoConnectionString)
 		if err != nil {
 			log.Fatal("Failed to start the Mongo session")
 		}
@@ -24,79 +36,115 @@ func getSession() *mgo.Session {
 	return session.Clone()
 }
 
-func main() {
-	log.Printf("Init server at %s", host)
-	http.HandleFunc("/api/v1/highlights/", HighlightsHandler)
-	log.Fatal(http.ListenAndServe(host, nil))
-}
+func init() {
+	// Create an index to define unique highlights across different sources
+	hl_unique_index := mgo.Index{
+		Key:        []string{"text", "source_id"},
+		Unique:     true, // will fail if the is a duplicate
+		DropDups:   false,
+		Background: false,
+		Sparse:     true,
+	}
 
-func HighlightsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost {
-		CreateHighlights(w, r)
-	} else if r.Method == http.MethodGet {
-		ListHighlights(w, r)
+	// TODO: refactor this somehow
+	session := getSession()
+	defer session.Close()
+	collection := session.DB(dbName).C(collectionName)
+
+	if err := collection.EnsureIndex(hl_unique_index); err != nil {
+		log.Fatal("Failed to create index: %s", err)
 	} else {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		log.Println("Index is OK")
 	}
 }
 
-func CreateHighlights(w http.ResponseWriter, r *http.Request) {
-	var data map[string]*[]common.Highlight
+func main() {
+	log.Printf("Init server at %s", host)
 
+	// Regester a rout
+	// TODO: implement a common solution via regexps
+	route := "/api/v1/highlights/"
+	http.HandleFunc(route, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		// Support only exact path
+		if r.URL.Path != route {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		session := getSession()
+		defer session.Close()
+		collection := session.DB(dbName).C(collectionName)
+
+		fmt.Printf("Got %s request", r.Method)
+
+		// Support different behaviour depending on the request type
+		if r.Method == http.MethodPost {
+			CreateHighlights(w, r, collection)
+		} else if r.Method == http.MethodGet {
+			ListHighlights(w, r, collection)
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})
+	log.Fatal(http.ListenAndServe(host, nil))
+}
+
+// CreateHighlights creates highlights from the data received
+// TODO: validate items received
+func CreateHighlights(w http.ResponseWriter, r *http.Request, c *mgo.Collection) {
 	defer r.Body.Close()
 
-	err := json.NewDecoder(r.Body).Decode(&data)
-	if err != nil {
+	var data map[string]*[]common.Highlight
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
 		log.Printf("Error: %s", err)
 		w.WriteHeader(http.StatusBadRequest)
 	}
 
-	// TODO: validate items received
-
-	log.Printf("Got: %+v", data)
-
-	s := getSession()
-	defer s.Close()
-	collection := s.DB("storage").C("highlights1")
-
-	items := make([]interface{}, len(*data["items"]))
+	result := map[string]int{"updated": 0, "inserted": 0, "errors": 0}
 
 	for _, x := range *data["items"] {
-		items = append(items, x)
+		// Should match the  ``hl_unique_index``
+		selector := map[string]string{"text": x.Text, "source_id": x.SourceID}
+
+		info, err := c.Upsert(selector, x)
+
+		if err != nil {
+			log.Printf("[WARN] Cant't insert a document: %s", err)
+			result["error"] += 1
+		} else {
+			log.Printf("Success: %+v", *info)
+			result["updated"] += info.Updated
+			if info.UpsertedId != nil {
+				result["inserted"] += 1
+			}
+		}
 	}
 
-	err = collection.Insert(items...)
-	if err != nil {
-		log.Printf("DB Error: %s", err)
+	if jsonBytes, err := json.Marshal(result); err != nil {
+		log.Printf("[ERR] Something went frong: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 	} else {
-		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonBytes)
 	}
 }
 
-func ListHighlights(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Got GET request")
-
-	s := getSession()
-	defer s.Close()
-	collection := s.DB("storage").C("highlights1")
-
+// ListHighlights lists all highlitghts from the database
+// TODO: pagination!
+func ListHighlights(w http.ResponseWriter, r *http.Request, c *mgo.Collection) {
 	result := make([]*common.Highlight, 0)
-	err := collection.Find(nil).All(&result)
-	if err != nil {
+	if err := c.Find(nil).All(&result); err != nil {
 		log.Printf("Read error: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 
-	log.Printf("Result %+v", result[0])
-
-	jsonBytes, err := json.Marshal(result)
-	if err == nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write(jsonBytes)
-	} else {
+	if jsonBytes, err := json.Marshal(result); err != nil {
 		log.Printf("Marshal error: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
+	} else {
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonBytes)
 	}
 }
